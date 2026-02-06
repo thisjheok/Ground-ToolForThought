@@ -12,20 +12,48 @@
   "activationEvents": ["*"],
   "main": "./out/extension.js",
   "contributes": {
-  "commands": [
-    {
-      "command": "ground.startSession",
-      "title": "Tool for Thought: Start Session"
+    "commands": [
+      {
+        "command": "ground.startSession",
+        "title": "Tool for Thought: Start Session"
+      },
+      {
+        "command": "ground.showSession",
+        "title": "Tool for Thought: Show Session (Debug)"
+      },
+      {
+        "command": "ground.clearSession",
+        "title": "Tool for Thought: Clear Session"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tftContainer",
+          "title": "Tool for Thought",
+          "icon": "media/tft.svg"
+        }
+      ]
     },
-     {
-      "command": "ground.showSession",
-      "title": "Tool for Thought: Show Session (Debug)"
-    },
-    {
-      "command": "ground.clearSession",
-      "title": "Tool for Thought: Clear Session"
+    "views": {
+      "tftContainer": [
+        {
+          "id": "tft.outlineView",
+          "name": "Outline",
+          "type": "webview"
+        },
+        {
+          "id": "tft.evidenceView",
+          "name": "Evidence",
+          "type": "webview"
+        },
+        {
+          "id": "tft.provocationView",
+          "name": "Provocations",
+          "type": "webview"
+        }
+      ]
     }
-  ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
