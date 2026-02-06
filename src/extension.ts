@@ -8,6 +8,11 @@ import { clearSession } from "./commands/clearSession";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
+
+import { OutlineViewProvider } from "./views/outlineView";
+import { EvidenceViewProvider } from "./views/evidenceView";
+import { ProvocationViewProvider } from "./views/provocationView";
+
 export function activate(context: vscode.ExtensionContext) {
   const store = new SessionStore(context);
   
@@ -30,6 +35,28 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("ground.clearSession", async () => {
       await clearSession(store);
     })
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      OutlineViewProvider.viewType,
+      new OutlineViewProvider(context, store),
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
+  );
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      EvidenceViewProvider.viewType,
+      new EvidenceViewProvider(context, store),
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
+  );
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      ProvocationViewProvider.viewType,
+      new ProvocationViewProvider(context, store),
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
   );
 }
 

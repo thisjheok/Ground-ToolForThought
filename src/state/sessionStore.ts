@@ -43,7 +43,14 @@ function getActiveContext(): Session["context"] {
 export class SessionStore {
   private session: Session | null = null;
 
+  private readonly _onDidChangeSession = new vscode.EventEmitter<Session | null>();
+  public readonly onDidChangeSession = this._onDidChangeSession.event;
+  
   constructor(private readonly ctx: vscode.ExtensionContext) {}
+  
+  private emit() {
+    this._onDidChangeSession.fire(this.session);
+  }
 
   async load(): Promise<Session | null> {
     const raw = this.ctx.workspaceState.get<Session>(SESSION_KEY);
@@ -58,6 +65,7 @@ export class SessionStore {
       gate: computeGate(raw),
     };
     this.session = normalized;
+    this.emit();
     return normalized;
   }
 
@@ -105,6 +113,7 @@ export class SessionStore {
 
     await this.ctx.workspaceState.update(SESSION_KEY, s);
     this.session = s;
+    this.emit();
     return s;
   }
 
@@ -136,6 +145,7 @@ export class SessionStore {
 
     await this.ctx.workspaceState.update(SESSION_KEY, next);
     this.session = next;
+    this.emit();
     return next;
   }
 
@@ -145,5 +155,6 @@ export class SessionStore {
   async clear(): Promise<void> {
     await this.ctx.workspaceState.update(SESSION_KEY, undefined);
     this.session = null;
+    this.emit();
   }
 }
