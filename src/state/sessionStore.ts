@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { computeGate } from "./gate";
 import {
@@ -6,10 +7,13 @@ import {
   ProvocationDecision,
   ProvocationResponse,
   Session,
+  SessionMeta,
+  SessionStoreState,
 } from "./types";
 import { EvidenceItem } from "./types";
 
-const SESSION_KEY = "tft.session.v1";
+const LEGACY_SESSION_KEY = "tft.session.v1";
+const SESSION_STORE_KEY = "tft.sessions.v2";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -17,6 +21,17 @@ function nowIso(): string {
 
 function newId(prefix = "sess"): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isValidMode(mode: unknown): mode is Mode {
+  return (
+    mode === "bugfix" ||
+    mode === "feature" ||
+    mode === "refactor" ||
+    mode === "standard" ||
+    mode === "learning" ||
+    mode === "fast"
+  );
 }
 
 function getActiveContext(): Session["context"] {
@@ -40,6 +55,28 @@ function getActiveContext(): Session["context"] {
   return { workspaceFolder, activeFile, selection };
 }
 
+function summarizeSession(session: Session) {
+  return {
+    evidenceCount: session.evidence.length,
+    provocationTotal: session.gate.provocationTotalCount,
+    provocationResponded: session.gate.provocationRespondedCount,
+    outlineReady: session.gate.outlineReady,
+    provocationReady: session.gate.provocationReady,
+  };
+}
+
+function getSessionMeta(session: Session): SessionMeta {
+  return {
+    id: session.id,
+    title: session.title,
+    mode: session.mode,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    archived: session.archived,
+    ...summarizeSession(session),
+  };
+}
+
 function normalizeProvocations(raw: any): ProvocationCard[] {
   const items: any[] = Array.isArray(raw?.provocations) ? raw.provocations : [];
   return items
@@ -48,9 +85,10 @@ function normalizeProvocations(raw: any): ProvocationCard[] {
       const kind = typeof item.kind === "string" ? item.kind : item.type;
       const title = typeof item.title === "string" ? item.title : item.type ?? "Provocation";
       const body = typeof item.body === "string" ? item.body : item.prompt ?? "";
-      const severity = item.severity === "low" || item.severity === "med" || item.severity === "high"
-        ? item.severity
-        : undefined;
+      const severity =
+        item.severity === "low" || item.severity === "med" || item.severity === "high"
+          ? item.severity
+          : undefined;
       const basedOnEvidenceIds = Array.isArray(item.basedOnEvidenceIds)
         ? item.basedOnEvidenceIds.filter((id: unknown): id is string => typeof id === "string")
         : undefined;
@@ -70,9 +108,10 @@ function normalizeProvocations(raw: any): ProvocationCard[] {
 function normalizeResponses(raw: any): Record<string, ProvocationResponse> {
   const legacy = raw?.decisions ?? {};
   const current = raw?.provocationResponses ?? {};
-  const source = typeof current === "object" && current !== null && Object.keys(current).length > 0
-    ? current
-    : legacy;
+  const source =
+    typeof current === "object" && current !== null && Object.keys(current).length > 0
+      ? current
+      : legacy;
 
   const out: Record<string, ProvocationResponse> = {};
   for (const [key, value] of Object.entries(source)) {
@@ -97,24 +136,39 @@ function normalizeResponses(raw: any): Record<string, ProvocationResponse> {
   return out;
 }
 
+function defaultTitleForMode(mode: Mode, activeFile?: string): string {
+  const fileName = activeFile ? path.basename(activeFile) : "";
+  if (mode === "bugfix") return fileName ? `Bugfix: ${fileName}` : "Bugfix Session";
+  if (mode === "feature") return fileName ? `Feature: ${fileName}` : "Feature Session";
+  if (mode === "refactor") return fileName ? `Refactor: ${fileName}` : "Refactor Session";
+  if (mode === "learning") return fileName ? `Learning: ${fileName}` : "Learning Session";
+  if (mode === "fast") return fileName ? `Fast: ${fileName}` : "Fast Session";
+  return fileName ? `Session: ${fileName}` : "Standard Session";
+}
+
 function normalizeSession(raw: any): Session {
   const createdAt = typeof raw?.createdAt === "string" ? raw.createdAt : nowIso();
   const updatedAt = typeof raw?.updatedAt === "string" ? raw.updatedAt : createdAt;
+  const context = {
+    workspaceFolder:
+      typeof raw?.context?.workspaceFolder === "string" ? raw.context.workspaceFolder : undefined,
+    activeFile: typeof raw?.context?.activeFile === "string" ? raw.context.activeFile : undefined,
+    selection: raw?.context?.selection,
+  };
+  const mode: Mode = isValidMode(raw?.mode) ? raw.mode : "standard";
+  const title =
+    typeof raw?.title === "string" && raw.title.trim().length > 0
+      ? raw.title.trim()
+      : defaultTitleForMode(mode, context.activeFile);
 
   const session: Session = {
     id: typeof raw?.id === "string" ? raw.id : newId(),
-    mode:
-      raw?.mode === "learning" || raw?.mode === "standard" || raw?.mode === "fast"
-        ? raw.mode
-        : "standard",
+    title,
+    mode,
     createdAt,
     updatedAt,
-    context: {
-      workspaceFolder:
-        typeof raw?.context?.workspaceFolder === "string" ? raw.context.workspaceFolder : undefined,
-      activeFile: typeof raw?.context?.activeFile === "string" ? raw.context.activeFile : undefined,
-      selection: raw?.context?.selection,
-    },
+    archived: raw?.archived === true ? true : undefined,
+    context,
     outline: {
       symptom: typeof raw?.outline?.symptom === "string" ? raw.outline.symptom : "",
       reproSteps: typeof raw?.outline?.reproSteps === "string" ? raw.outline.reproSteps : "",
@@ -142,44 +196,197 @@ function normalizeSession(raw: any): Session {
   return session;
 }
 
+function normalizeStoreState(raw: any): SessionStoreState {
+  if (!raw || typeof raw !== "object") {
+    return { activeSessionId: null, sessionsById: {}, sessionOrder: [] };
+  }
+
+  const sessionsById: Record<string, Session> = {};
+  const entries = Object.entries(raw.sessionsById ?? {});
+  for (const [, value] of entries) {
+    const session = normalizeSession(value);
+    sessionsById[session.id] = session;
+  }
+
+  const sessionOrder: string[] = Array.isArray(raw.sessionOrder)
+    ? raw.sessionOrder.filter((id: unknown): id is string => typeof id === "string")
+    : [];
+  const dedupedOrder: string[] = [...new Set(sessionOrder)].filter((id) => Boolean(sessionsById[id]));
+  const missingIds = Object.keys(sessionsById).filter((id) => !dedupedOrder.includes(id));
+  const mergedOrder: string[] = [...dedupedOrder, ...missingIds];
+
+  const rawActiveSessionId = typeof raw.activeSessionId === "string" ? raw.activeSessionId : null;
+  const activeSessionId =
+    rawActiveSessionId && sessionsById[rawActiveSessionId]
+      ? rawActiveSessionId
+      : mergedOrder[0] ?? null;
+
+  return {
+    activeSessionId,
+    sessionsById,
+    sessionOrder: mergedOrder,
+  };
+}
+
+function emptyState(): SessionStoreState {
+  return { activeSessionId: null, sessionsById: {}, sessionOrder: [] };
+}
+
 export class SessionStore {
-  private session: Session | null = null;
+  private state: SessionStoreState = emptyState();
+  private loaded = false;
 
   private readonly _onDidChangeSession = new vscode.EventEmitter<Session | null>();
   public readonly onDidChangeSession = this._onDidChangeSession.event;
 
+  private readonly _onDidChangeSessionList = new vscode.EventEmitter<SessionMeta[]>();
+  public readonly onDidChangeSessionList = this._onDidChangeSessionList.event;
+
   constructor(private readonly ctx: vscode.ExtensionContext) {}
 
-  private emit() {
-    this._onDidChangeSession.fire(this.session);
+  private get activeSession(): Session | null {
+    const id = this.state.activeSessionId;
+    return id ? this.state.sessionsById[id] ?? null : null;
+  }
+
+  private async persistState() {
+    await this.ctx.workspaceState.update(SESSION_STORE_KEY, this.state);
+  }
+
+  private emitSession() {
+    this._onDidChangeSession.fire(this.activeSession);
+  }
+
+  private emitSessionList() {
+    this._onDidChangeSessionList.fire(this.listSessions({ includeArchived: true }));
+  }
+
+  private async ensureLoaded() {
+    if (!this.loaded) {
+      await this.load();
+    }
+  }
+
+  private bumpOrder(sessionId: string) {
+    this.state.sessionOrder = [sessionId, ...this.state.sessionOrder.filter((id) => id !== sessionId)];
+  }
+
+  private updateSessionInternal(sessionId: string, patch: Partial<Session>, touchUpdatedAt = true): Session {
+    const current = this.state.sessionsById[sessionId];
+    if (!current) {
+      throw new Error(`Unknown session: ${sessionId}`);
+    }
+
+    const next: Session = {
+      ...current,
+      ...patch,
+      context: patch.context ? { ...current.context, ...patch.context } : current.context,
+      outline: patch.outline ? { ...current.outline, ...patch.outline } : current.outline,
+      provocationResponses: patch.provocationResponses
+        ? { ...current.provocationResponses, ...patch.provocationResponses }
+        : current.provocationResponses,
+      updatedAt: touchUpdatedAt ? nowIso() : current.updatedAt,
+    };
+    next.gate = computeGate(next);
+    this.state.sessionsById[sessionId] = next;
+    return next;
   }
 
   async load(): Promise<Session | null> {
-    const raw = this.ctx.workspaceState.get<any>(SESSION_KEY);
-    if (!raw) {
-      this.session = null;
-      return null;
+    const current = this.ctx.workspaceState.get<any>(SESSION_STORE_KEY);
+    if (current) {
+      this.state = normalizeStoreState(current);
+      this.loaded = true;
+      await this.persistState();
+      this.emitSessionList();
+      this.emitSession();
+      return this.activeSession;
     }
 
-    const normalized = normalizeSession(raw);
-    this.session = normalized;
-    await this.ctx.workspaceState.update(SESSION_KEY, normalized);
-    this.emit();
-    return normalized;
+    // One-time migration from legacy single-session schema.
+    const legacy = this.ctx.workspaceState.get<any>(LEGACY_SESSION_KEY);
+    if (legacy) {
+      const session = normalizeSession(legacy);
+      this.state = {
+        activeSessionId: session.id,
+        sessionsById: { [session.id]: session },
+        sessionOrder: [session.id],
+      };
+      this.loaded = true;
+      await this.persistState();
+      await this.ctx.workspaceState.update(LEGACY_SESSION_KEY, undefined);
+      this.emitSessionList();
+      this.emitSession();
+      return this.activeSession;
+    }
+
+    this.state = emptyState();
+    this.loaded = true;
+    this.emitSessionList();
+    this.emitSession();
+    return null;
   }
 
   get(): Session | null {
-    return this.session;
+    return this.activeSession;
   }
 
-  async create(mode: Mode = "standard"): Promise<Session> {
+  getActiveSession(): Session | null {
+    return this.activeSession;
+  }
+
+  getStateSnapshot(): SessionStoreState {
+    return {
+      activeSessionId: this.state.activeSessionId,
+      sessionsById: { ...this.state.sessionsById },
+      sessionOrder: [...this.state.sessionOrder],
+    };
+  }
+
+  listSessions(options?: { includeArchived?: boolean }): SessionMeta[] {
+    const includeArchived = options?.includeArchived ?? false;
+    return this.state.sessionOrder
+      .map((id) => this.state.sessionsById[id])
+      .filter((session): session is Session => Boolean(session))
+      .filter((session) => includeArchived || !session.archived)
+      .map((session) => getSessionMeta(session));
+  }
+
+  async setActiveSession(sessionId: string): Promise<void> {
+    await this.ensureLoaded();
+    const session = this.state.sessionsById[sessionId];
+    if (!session) {
+      throw new Error("Session not found.");
+    }
+    if (session.archived) {
+      throw new Error("Archived session cannot be active.");
+    }
+
+    this.state.activeSessionId = sessionId;
+    this.bumpOrder(sessionId);
+    this.updateSessionInternal(sessionId, {}, true);
+    await this.persistState();
+    this.emitSessionList();
+    this.emitSession();
+  }
+
+  async createSession(mode: Mode = "standard", title?: string): Promise<string> {
+    await this.ensureLoaded();
     const createdAt = nowIso();
-    const s: Session = {
-      id: newId(),
+    const context = getActiveContext();
+    const id = newId();
+    const resolvedTitle =
+      typeof title === "string" && title.trim().length > 0
+        ? title.trim()
+        : defaultTitleForMode(mode, context.activeFile);
+
+    const session: Session = {
+      id,
+      title: resolvedTitle,
       mode,
       createdAt,
       updatedAt: createdAt,
-      context: getActiveContext(),
+      context,
       outline: {
         definitionOfDone: "",
         constraints: "",
@@ -199,49 +406,120 @@ export class SessionStore {
         canGeneratePatch: false,
         canExport: false,
       },
+      archived: undefined,
     };
+    session.gate = computeGate(session);
 
-    s.gate = computeGate(s);
+    this.state.sessionsById[id] = session;
+    this.state.activeSessionId = id;
+    this.bumpOrder(id);
 
-    await this.ctx.workspaceState.update(SESSION_KEY, s);
-    this.session = s;
-    this.emit();
-    return s;
+    await this.persistState();
+    this.emitSessionList();
+    this.emitSession();
+    return id;
   }
 
-  async update(patch: Partial<Session>): Promise<Session> {
-    const current = this.session ?? (await this.load());
-    if (!current) {
-      return this.create("standard");
+  async renameSession(sessionId: string, newTitle: string): Promise<void> {
+    await this.ensureLoaded();
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    this.updateSessionInternal(sessionId, { title: trimmed }, true);
+    this.bumpOrder(sessionId);
+    await this.persistState();
+    this.emitSessionList();
+    this.emitSession();
+  }
+
+  async archiveSession(sessionId: string): Promise<void> {
+    await this.ensureLoaded();
+    this.updateSessionInternal(sessionId, { archived: true }, true);
+
+    if (this.state.activeSessionId === sessionId) {
+      const nextActive = this.state.sessionOrder.find((id) => {
+        const session = this.state.sessionsById[id];
+        return session && !session.archived && id !== sessionId;
+      });
+      this.state.activeSessionId = nextActive ?? null;
     }
 
-    const next: Session = {
-      ...current,
-      ...patch,
-      context: patch.context ? { ...current.context, ...patch.context } : current.context,
-      outline: patch.outline ? { ...current.outline, ...patch.outline } : current.outline,
-      provocationResponses: patch.provocationResponses
-        ? { ...current.provocationResponses, ...patch.provocationResponses }
-        : current.provocationResponses,
-      updatedAt: nowIso(),
-    };
+    await this.persistState();
+    this.emitSessionList();
+    this.emitSession();
+  }
 
-    next.gate = computeGate(next);
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.ensureLoaded();
+    delete this.state.sessionsById[sessionId];
+    this.state.sessionOrder = this.state.sessionOrder.filter((id) => id !== sessionId);
 
-    await this.ctx.workspaceState.update(SESSION_KEY, next);
-    this.session = next;
-    this.emit();
+    if (this.state.activeSessionId === sessionId) {
+      const nextActive = this.state.sessionOrder.find((id) => {
+        const session = this.state.sessionsById[id];
+        return session && !session.archived;
+      });
+      this.state.activeSessionId = nextActive ?? null;
+    }
+
+    await this.persistState();
+    this.emitSessionList();
+    this.emitSession();
+  }
+
+  async touchSessionUpdatedAt(sessionId: string): Promise<void> {
+    await this.ensureLoaded();
+    this.updateSessionInternal(sessionId, {}, true);
+    this.bumpOrder(sessionId);
+    await this.persistState();
+    this.emitSessionList();
+    if (this.state.activeSessionId === sessionId) {
+      this.emitSession();
+    }
+  }
+
+  async updateSession(sessionId: string, patch: Partial<Session>): Promise<Session> {
+    await this.ensureLoaded();
+    const next = this.updateSessionInternal(sessionId, patch, true);
+    this.bumpOrder(sessionId);
+    await this.persistState();
+    this.emitSessionList();
+    if (this.state.activeSessionId === sessionId) {
+      this.emitSession();
+    }
     return next;
   }
 
+  async updateActiveSession(patch: Partial<Session>): Promise<Session> {
+    await this.ensureLoaded();
+    const activeId = this.state.activeSessionId;
+    if (!activeId) {
+      const createdId = await this.createSession("standard");
+      return this.state.sessionsById[createdId];
+    }
+    return this.updateSession(activeId, patch);
+  }
+
+  // Compatibility API for existing callers.
+  async create(mode: Mode = "standard"): Promise<Session> {
+    const id = await this.createSession(mode);
+    return this.state.sessionsById[id];
+  }
+
+  // Compatibility API for existing callers.
+  async update(patch: Partial<Session>): Promise<Session> {
+    return this.updateActiveSession(patch);
+  }
+
   async clear(): Promise<void> {
-    await this.ctx.workspaceState.update(SESSION_KEY, undefined);
-    this.session = null;
-    this.emit();
+    this.state = emptyState();
+    this.loaded = true;
+    await this.persistState();
+    this.emitSessionList();
+    this.emitSession();
   }
 
   async setProvocations(cards: ProvocationCard[]): Promise<Session> {
-    const current = this.session ?? (await this.load()) ?? (await this.create("standard"));
+    const current = this.activeSession ?? (await this.create("standard"));
     const nextResponses: Record<string, ProvocationResponse> = {};
     for (const card of cards) {
       const existing = current.provocationResponses[card.id];
@@ -250,7 +528,7 @@ export class SessionStore {
       }
     }
 
-    return this.update({
+    return this.updateActiveSession({
       provocations: cards,
       provocationResponses: nextResponses,
     });
@@ -261,7 +539,7 @@ export class SessionStore {
     decision: ProvocationDecision,
     rationale: string
   ): Promise<Session> {
-    const current = this.session ?? (await this.load()) ?? (await this.create("standard"));
+    const current = this.activeSession ?? (await this.create("standard"));
     const exists = current.provocations.some((card) => card.id === cardId);
     if (!exists) {
       throw new Error("Unknown provocation card.");
@@ -272,7 +550,7 @@ export class SessionStore {
       throw new Error("Rationale is required.");
     }
 
-    return this.update({
+    return this.updateActiveSession({
       provocationResponses: {
         [cardId]: {
           decision,
@@ -284,31 +562,27 @@ export class SessionStore {
   }
 
   async addEvidence(items: EvidenceItem | EvidenceItem[]): Promise<void> {
-    const current = this.session ?? (await this.load());
-    if (!current) {
-      await this.create("standard");
-    }
-    const s = this.session!;
+    const current = this.activeSession ?? (await this.create("standard"));
     const newItems = Array.isArray(items) ? items : [items];
 
-    await this.update({
-      evidence: [...(s.evidence ?? []), ...newItems],
+    await this.updateActiveSession({
+      evidence: [...(current.evidence ?? []), ...newItems],
     });
   }
 
   async removeEvidence(evidenceId: string): Promise<void> {
-    const s = this.session ?? (await this.load());
-    if (!s) return;
+    const session = this.activeSession;
+    if (!session) return;
 
-    const next = (s.evidence ?? []).filter((e) => e.id !== evidenceId);
-    await this.update({ evidence: next });
+    const next = (session.evidence ?? []).filter((e) => e.id !== evidenceId);
+    await this.updateActiveSession({ evidence: next });
   }
 
   async updateEvidenceWhy(evidenceId: string, whyIncluded: string): Promise<void> {
-    const s = this.session ?? (await this.load());
-    if (!s) return;
+    const session = this.activeSession;
+    if (!session) return;
 
-    const next = (s.evidence ?? []).map((e) => (e.id === evidenceId ? { ...e, whyIncluded } : e));
-    await this.update({ evidence: next });
+    const next = (session.evidence ?? []).map((e) => (e.id === evidenceId ? { ...e, whyIncluded } : e));
+    await this.updateActiveSession({ evidence: next });
   }
 }

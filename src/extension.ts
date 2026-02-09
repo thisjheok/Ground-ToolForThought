@@ -3,6 +3,11 @@ import { SessionStore } from "./state/sessionStore";
 import { startSession } from "./commands/session/startSession";
 import { showSession } from "./commands/session/showSession";
 import { clearSession } from "./commands/session/clearSession";
+import { newSession } from "./commands/session/newSession";
+import { switchSession } from "./commands/session/switchSession";
+import { renameSession } from "./commands/session/renameSession";
+import { archiveSession } from "./commands/session/archiveSession";
+import { showSessionHistory } from "./commands/session/showSessionHistory";
 import { addEvidenceFromSelection } from "./commands/evidence/addEvidenceFromSelection";
 import { addEvidenceFromActiveFile } from "./commands/evidence/addEvidenceFromActiveFile";
 import { addDiagnosticsEvidence } from "./commands/evidence/addDiagnosticsEvidence";
@@ -11,6 +16,7 @@ import { generateProvocationsMock } from "./commands/provocation/generateProvoca
 import { OutlineViewProvider } from "./views/outlineView";
 import { EvidenceViewProvider } from "./views/evidenceView";
 import { ProvocationViewProvider } from "./views/provocationView";
+import { SessionHistoryViewProvider } from "./views/sessionHistoryView";
 
 export function activate(context: vscode.ExtensionContext) {
   const store = new SessionStore(context);
@@ -19,6 +25,36 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("ground.startSession", async () => {
       await startSession(store);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ground.session.new", async () => {
+      await newSession(store);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ground.session.switch", async () => {
+      await switchSession(store);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ground.session.rename", async () => {
+      await renameSession(store);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ground.session.archive", async () => {
+      await archiveSession(store);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ground.session.showHistory", async () => {
+      await showSessionHistory();
     })
   );
 
@@ -84,6 +120,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(
       ProvocationViewProvider.viewType,
       new ProvocationViewProvider(context, store),
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      SessionHistoryViewProvider.viewType,
+      new SessionHistoryViewProvider(context, store),
       { webviewOptions: { retainContextWhenHidden: true } }
     )
   );

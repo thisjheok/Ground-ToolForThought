@@ -18,6 +18,26 @@
         "title": "Tool for Thought: Start Session"
       },
       {
+        "command": "ground.session.new",
+        "title": "Tool for Thought: Session - New"
+      },
+      {
+        "command": "ground.session.switch",
+        "title": "Tool for Thought: Session - Switch"
+      },
+      {
+        "command": "ground.session.rename",
+        "title": "Tool for Thought: Session - Rename Active"
+      },
+      {
+        "command": "ground.session.archive",
+        "title": "Tool for Thought: Session - Archive Active"
+      },
+      {
+        "command": "ground.session.showHistory",
+        "title": "Tool for Thought: Session - Show History"
+      },
+      {
         "command": "ground.showSession",
         "title": "Tool for Thought: Show Session (Debug)"
       },
@@ -70,6 +90,11 @@
         {
           "id": "tft.provocationView",
           "name": "Provocations",
+          "type": "webview"
+        },
+        {
+          "id": "tft.sessionHistoryView",
+          "name": "Session History",
           "type": "webview"
         }
       ]

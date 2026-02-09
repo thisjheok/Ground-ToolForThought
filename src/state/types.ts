@@ -1,6 +1,12 @@
 // src/state/types.ts
 
-export type Mode = "learning" | "standard" | "fast";
+export type Mode =
+  | "bugfix"
+  | "feature"
+  | "refactor"
+  | "standard"
+  | "learning"
+  | "fast";
 
 export interface Outline {
   symptom?: string;            // 버그 모드일 때(선택)
@@ -83,6 +89,7 @@ export interface SessionContext {
 
 export interface Session {
   id: string;
+  title: string;
   mode: Mode;
 
   createdAt: string;
@@ -96,4 +103,25 @@ export interface Session {
   provocationResponses: Record<string, ProvocationResponse>; // key = cardId
 
   gate: GateStatus;
+  archived?: boolean;
+}
+
+export interface SessionMeta {
+  id: string;
+  title: string;
+  mode: Mode;
+  createdAt: string;
+  updatedAt: string;
+  archived?: boolean;
+  evidenceCount: number;
+  provocationTotal: number;
+  provocationResponded: number;
+  outlineReady: boolean;
+  provocationReady: boolean;
+}
+
+export interface SessionStoreState {
+  activeSessionId: string | null;
+  sessionsById: Record<string, Session>;
+  sessionOrder: string[];
 }
