@@ -1,5 +1,3 @@
-// src/views/outlineView.ts
-
 import * as vscode from "vscode";
 import { SessionStore } from "../state/sessionStore";
 import { Session } from "../state/types";
@@ -28,38 +26,28 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
       enableScripts: true,
     };
 
-    view.webview.html = this.renderHtml(view.webview);
+    view.webview.html = this.renderHtml();
 
-    // 메시지 수신
     view.webview.onDidReceiveMessage(async (msg: IncomingMessage) => {
       if (msg.type === "ready") {
-        // 웹뷰가 준비되면 현재 세션 push
         this.pushSession();
         return;
       }
 
       if (msg.type === "updateOutline") {
-        // 세션 없으면 생성
         const s = this.store.get() ?? (await this.store.create("standard"));
-
         await this.store.update({
           outline: {
             ...s.outline,
             ...msg.payload,
           },
         });
-
-        // store 이벤트로 다른 패널도 갱신되지만, outline은 즉시 반영해도 됨
         this.pushSession();
       }
     });
 
-    // store 변경을 웹뷰로 push
-    this.context.subscriptions.push(
-      this.store.onDidChangeSession(() => this.pushSession())
-    );
+    this.context.subscriptions.push(this.store.onDidChangeSession(() => this.pushSession()));
 
-    // 초기 push
     this.pushSession();
   }
 
@@ -72,10 +60,10 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  private renderHtml(webview: vscode.Webview): string {
+  private renderHtml(): string {
     const nonce = getNonce();
 
-    return /* html */ `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -84,16 +72,31 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Outline</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 12px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 12px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-sideBar-background);
+    }
     .row { margin-bottom: 10px; }
-    label { display: block; font-size: 12px; opacity: 0.8; margin-bottom: 6px; }
-    textarea { width: 100%; box-sizing: border-box; min-height: 70px; resize: vertical; }
-    .top { display:flex; align-items:center; justify-content: space-between; margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 70px;
+      resize: vertical;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border, transparent);
+      padding: 6px;
+    }
+    .top { display:flex; align-items:center; justify-content: space-between; margin-bottom: 8px; }
     .badge { font-size: 12px; padding: 4px 8px; border-radius: 10px; }
-    .ok { background: rgba(40, 167, 69, 0.15); }
-    .warn { background: rgba(255, 193, 7, 0.18); }
-    .hint { font-size: 12px; opacity: 0.75; margin-top: 6px; }
-    .muted { opacity: 0.7; font-size: 12px; }
+    .ok { background: var(--vscode-charts-green, #388a34); color: var(--vscode-editor-background); }
+    .warn { background: var(--vscode-charts-yellow, #cca700); color: var(--vscode-editor-background); }
+    .hint { font-size: 12px; color: var(--vscode-descriptionForeground); margin-top: 6px; }
+    .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
+    .gateRow { margin-bottom: 12px; font-size: 12px; color: var(--vscode-descriptionForeground); }
   </style>
 </head>
 <body>
@@ -102,11 +105,12 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
       <div><strong>Outline</strong></div>
       <div class="muted">Fill required fields to unlock next steps.</div>
     </div>
-    <div id="gateBadge" class="badge warn">⚠️ Gate</div>
+    <div id="outlineGateBadge" class="badge warn">Outline Incomplete</div>
   </div>
+  <div id="provGateRow" class="gateRow">Provocations: 0/0 responded (Not Ready)</div>
 
   <div id="noSession" class="hint" style="display:none;">
-    No session yet. Run <strong>Tool for Thought: Start Session</strong> or start typing here to auto-create.
+    No session yet. Run <strong>Tool for Thought: Start Session</strong> or start typing to auto-create.
   </div>
 
   <div class="row">
@@ -130,16 +134,24 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
     const dodEl = document.getElementById('dod');
     const consEl = document.getElementById('constraints');
     const verEl = document.getElementById('verify');
-    const badgeEl = document.getElementById('gateBadge');
+    const outlineGateBadgeEl = document.getElementById('outlineGateBadge');
+    const provGateRowEl = document.getElementById('provGateRow');
     const noSessionEl = document.getElementById('noSession');
 
     let lastSent = { definitionOfDone: '', constraints: '', verificationPlan: '' };
     let isApplyingRemote = false;
 
-    function updateBadge(session) {
-      const ok = !!(session && session.gate && session.gate.outlineReady);
-      badgeEl.className = 'badge ' + (ok ? 'ok' : 'warn');
-      badgeEl.textContent = ok ? '✅ Outline Ready' : '⚠️ Outline Incomplete';
+    function updateGateUI(session) {
+      const outlineReady = !!(session && session.gate && session.gate.outlineReady);
+      const provResponded = (session && session.gate && session.gate.provocationRespondedCount) || 0;
+      const provTotal = (session && session.gate && session.gate.provocationTotalCount) || 0;
+      const provReady = !!(session && session.gate && session.gate.provocationReady);
+
+      outlineGateBadgeEl.className = 'badge ' + (outlineReady ? 'ok' : 'warn');
+      outlineGateBadgeEl.textContent = outlineReady ? 'Outline Ready' : 'Outline Incomplete';
+
+      provGateRowEl.textContent =
+        'Provocations: ' + provResponded + '/' + provTotal + ' responded (' + (provReady ? 'Ready' : 'Not Ready') + ')';
     }
 
     function applySession(session) {
@@ -150,7 +162,7 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
         dodEl.value = '';
         consEl.value = '';
         verEl.value = '';
-        updateBadge(null);
+        updateGateUI(null);
         isApplyingRemote = false;
         return;
       }
@@ -168,7 +180,7 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
         verificationPlan: verEl.value
       };
 
-      updateBadge(session);
+      updateGateUI(session);
       isApplyingRemote = false;
     }
 
@@ -181,15 +193,15 @@ export class OutlineViewProvider implements vscode.WebviewViewProvider {
         verificationPlan: verEl.value
       };
 
-      // 변화가 있을 때만 전송
       if (
         payload.definitionOfDone === lastSent.definitionOfDone &&
         payload.constraints === lastSent.constraints &&
         payload.verificationPlan === lastSent.verificationPlan
-      ) return;
+      ) {
+        return;
+      }
 
       lastSent = payload;
-
       vscode.postMessage({ type: 'updateOutline', payload });
     }
 

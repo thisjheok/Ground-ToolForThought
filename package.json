@@ -40,6 +40,10 @@
       {
         "command": "ground.ingestTestLog",
         "title": "Tool for Thought: Evidence - Ingest Test Log"
+      },
+      {
+        "command": "ground.generateProvocationsMock",
+        "title": "Tool for Thought: Provocation - Generate Mock Cards"
       }
     ],
     "viewsContainers": {

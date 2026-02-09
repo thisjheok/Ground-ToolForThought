@@ -33,38 +33,39 @@ export interface EvidenceItem {
   source?: EvidenceSource;
 }
 
-export type ProvocationType =
+export type ProvocationKind =
   | "Counterexample"
-  | "HiddenAssumption"
-  | "Tradeoff"
+  | "Hidden Assumption"
+  | "Trade-off"
   | "Security"
   | "Performance"
-  | "TestGap";
+  | "Test Gap";
 
 export type Severity = "low" | "med" | "high";
 
 export interface ProvocationCard {
   id: string;
-  type: ProvocationType;
-  severity: Severity;
-  prompt: string;
-  basedOnEvidenceIds: string[];
-  suggestedChecks: string[];
+  kind: ProvocationKind;
+  title: string;
+  body: string;
+  severity?: Severity;
+  basedOnEvidenceIds?: string[];
   createdAt: string;
 }
 
-export type DecisionStatus = "accept" | "reject" | "hold";
+export type ProvocationDecision = "accept" | "hold" | "reject";
 
-export interface Decision {
-  cardId: string;
-  status: DecisionStatus;
-  reason: string;
-  updatedAt: string;
+export interface ProvocationResponse {
+  decision: ProvocationDecision;
+  rationale: string;
+  respondedAt: string;
 }
 
 export interface GateStatus {
   outlineReady: boolean;
+  provocationReady: boolean;
   provocationRespondedCount: number;
+  provocationTotalCount: number;
   canGeneratePatch: boolean;
   canExport: boolean;
 }
@@ -92,7 +93,7 @@ export interface Session {
   outline: Outline;
   evidence: EvidenceItem[];
   provocations: ProvocationCard[];
-  decisions: Record<string, Decision>; // key = cardId
+  provocationResponses: Record<string, ProvocationResponse>; // key = cardId
 
   gate: GateStatus;
 }

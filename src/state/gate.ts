@@ -6,10 +6,14 @@ function hasText(s?: string): boolean {
   return typeof s === "string" && s.trim().length > 0;
 }
 
-function countDecisionsWithReason(session: Session, minReasonLen: number): number {
-  return Object.values(session.decisions).filter((d) => {
-    return hasText(d.status) && hasText(d.reason) && d.reason.trim().length >= minReasonLen;
-  }).length;
+function hasValidResponse(session: Session, cardId: string): boolean {
+  const response = session.provocationResponses[cardId];
+  return Boolean(
+    response &&
+      hasText(response.decision) &&
+      hasText(response.rationale) &&
+      response.rationale.trim().length > 0
+  );
 }
 
 /**
@@ -36,16 +40,11 @@ export function computeGate(session: Session): Session["gate"] {
       hasText(outline.definitionOfDone) && hasText(outline.verificationPlan);
   }
 
-  // provocation 응답 조건
-  const minReasonLen = mode === "learning" ? 20 : mode === "standard" ? 10 : 5;
-  const respondedCount = countDecisionsWithReason(session, minReasonLen);
-
-  const minCards =
-    mode === "learning" ? 2 :
-    mode === "standard" ? 1 :
-    1;
-
-  const provocationReady = respondedCount >= minCards;
+  const totalCards = session.provocations.length;
+  const respondedCount = session.provocations.reduce((count, card) => {
+    return count + (hasValidResponse(session, card.id) ? 1 : 0);
+  }, 0);
+  const provocationReady = totalCards > 0 && respondedCount === totalCards;
 
   // MVP에서는 patch 생성은 아직 잠금
   const canGeneratePatch = false;
@@ -55,7 +54,9 @@ export function computeGate(session: Session): Session["gate"] {
 
   return {
     outlineReady,
+    provocationReady,
     provocationRespondedCount: respondedCount,
+    provocationTotalCount: totalCards,
     canGeneratePatch,
     canExport,
   };
