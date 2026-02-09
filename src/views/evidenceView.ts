@@ -85,20 +85,38 @@ export class EvidenceViewProvider implements vscode.WebviewViewProvider {
         content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 12px; }
-    .top { display:flex; justify-content: space-between; align-items:center; gap: 8px; }
-    .muted { opacity: 0.75; font-size: 12px; }
-    .btns { display:flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 12px; }
-    button { font-size: 12px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12); background: rgba(0,0,0,0.04); cursor: pointer; }
-    button:hover { background: rgba(0,0,0,0.07); }
-    .list { display:flex; flex-direction: column; gap: 10px; }
-    .card { border: 1px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 10px; }
-    .row { display:flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-    .title { font-weight: 600; }
-    .meta { font-size: 12px; opacity: 0.75; margin-top: 4px; }
-    .why { margin-top: 8px; font-size: 12px; }
-    .actions { display:flex; gap: 6px; }
-    pre { white-space: pre-wrap; word-break: break-word; background: rgba(0,0,0,0.04); padding: 8px; border-radius: 8px; margin-top: 8px; font-size: 12px; }
+    body {
+        color: var(--vscode-foreground);
+        background: var(--vscode-sideBar-background);
+    }
+    button {
+        color: var(--vscode-button-foreground);
+        background: var(--vscode-button-background);
+        border: 1px solid var(--vscode-button-border, transparent);
+        padding: 6px 10px;
+        cursor: pointer;
+    }
+    button:hover {
+        background: var(--vscode-button-hoverBackground);
+    }
+    .card {
+        background: var(--vscode-editorWidget-background);
+        border: 1px solid var(--vscode-editorWidget-border);
+    }
+    pre {
+        background: var(--vscode-textBlockQuote-background, rgba(0,0,0,0.08));
+        border: 1px solid var(--vscode-editorWidget-border);
+    }
+    .muted {
+        color: var(--vscode-descriptionForeground);
+        opacity: 1;
+    }
+    .btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;    
+        margin: 12px 0 14px;
+        }
   </style>
 </head>
 <body>

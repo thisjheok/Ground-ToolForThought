@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { SessionStore } from "../state/sessionStore";
-import { makeEvidence } from "../state/evidence";
+import { SessionStore } from "../../state/sessionStore";
+import { makeEvidence } from "../../state/evidence";
 
 function sevToString(sev: vscode.DiagnosticSeverity): string {
   switch (sev) {

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { SessionStore } from "../state/sessionStore";
-import { Mode } from "../state/types";
+import { SessionStore } from "../../state/sessionStore";
+import { Mode } from "../../state/types";
 
 export async function startSession(store: SessionStore) {
   const modePick = await vscode.window.showQuickPick<

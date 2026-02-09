@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { SessionStore } from "../state/sessionStore";
-import { formatRefFromRange, makeEvidence } from "../state/evidence";
+import { SessionStore } from "../../state/sessionStore";
+import { formatRefFromRange, makeEvidence } from "../../state/evidence";
 
 export async function addEvidenceFromSelection(store: SessionStore) {
   const editor = vscode.window.activeTextEditor;

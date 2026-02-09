@@ -1,7 +1,7 @@
 // src/commands/showSession.ts
 
 import * as vscode from "vscode";
-import { SessionStore } from "../state/sessionStore";
+import { SessionStore } from "../../state/sessionStore";
 
 export async function showSession(store: SessionStore) {
   const session = store.get() ?? (await store.load());

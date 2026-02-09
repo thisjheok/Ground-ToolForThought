@@ -2,9 +2,9 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { SessionStore } from "./state/sessionStore";
-import { startSession } from "./commands/startSession";
-import { showSession } from "./commands/showSession";
-import { clearSession } from "./commands/clearSession";
+import { startSession } from "./commands/session/startSession";
+import { showSession } from "./commands/session/showSession";
+import { clearSession } from "./commands/session/clearSession";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -13,10 +13,10 @@ import { OutlineViewProvider } from "./views/outlineView";
 import { EvidenceViewProvider } from "./views/evidenceView";
 import { ProvocationViewProvider } from "./views/provocationView";
 
-import { addEvidenceFromSelection } from "./commands/addEvidenceFromSelection";
-import { addEvidenceFromActiveFile } from "./commands/addEvidenceFromActiveFile";
-import { addDiagnosticsEvidence } from "./commands/addDiagnosticsEvidence";
-import { ingestTestLog } from "./commands/ingestTestLog";
+import { addEvidenceFromSelection } from "./commands/evidence/addEvidenceFromSelection";
+import { addEvidenceFromActiveFile } from "./commands/evidence/addEvidenceFromActiveFile";
+import { addDiagnosticsEvidence } from "./commands/evidence/addDiagnosticsEvidence";
+import { ingestTestLog } from "./commands/evidence/ingestTestLog";
 
 export function activate(context: vscode.ExtensionContext) {
   const store = new SessionStore(context);
