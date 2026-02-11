@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { ChatMessage, OllamaProvider } from "../../ai/OllamaProvider";
+import { ensureOllamaModelReady } from "../../ai/ensureOllamaSetup";
 import { SessionStore } from "../../state/sessionStore";
 import {
   EvidenceInsightCard,
@@ -113,15 +114,8 @@ export async function generateEvidenceInsightsAI(store: SessionStore) {
   const model = cfg.get<string>("ollama.model", "qwen2.5-coder:3b");
   const ollama = new OllamaProvider({ baseUrl, model });
 
-  const health = await ollama.healthCheck();
-  if (!health.ok) {
-    vscode.window.showErrorMessage(`Ground: Ollama not ready. ${health.reason ?? ""}`);
-    return;
-  }
-  if (health.models && !health.models.includes(model)) {
-    vscode.window.showErrorMessage(
-      `Ground: Model "${model}" not found in Ollama. Installed: ${health.models.slice(0, 5).join(", ")}`
-    );
+  const ready = await ensureOllamaModelReady(baseUrl, model);
+  if (!ready) {
     return;
   }
 

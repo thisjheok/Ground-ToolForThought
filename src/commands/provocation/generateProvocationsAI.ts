@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { OllamaProvider, ChatMessage } from "../../ai/OllamaProvider";
+import { ensureOllamaModelReady } from "../../ai/ensureOllamaSetup";
 import { SessionStore } from "../../state/sessionStore";
 import { ProvocationCard, ProvocationKind, Severity } from "../../state/types";
 
@@ -86,16 +87,8 @@ export async function generateProvocationsAI(store: SessionStore) {
 
   const ollama = new OllamaProvider({ baseUrl, model });
 
-  // 1) health check
-  const health = await ollama.healthCheck();
-  if (!health.ok) {
-    vscode.window.showErrorMessage(`Ground: Ollama not ready. ${health.reason ?? ""}`);
-    return;
-  }
-  if (health.models && !health.models.includes(model)) {
-    vscode.window.showErrorMessage(
-      `Ground: Model "${model}" not found in Ollama. Installed: ${health.models.slice(0, 5).join(", ")}`
-    );
+  const ready = await ensureOllamaModelReady(baseUrl, model);
+  if (!ready) {
     return;
   }
 
