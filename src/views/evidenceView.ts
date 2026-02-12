@@ -103,8 +103,20 @@ export class EvidenceViewProvider implements vscode.WebviewViewProvider {
   <style>
     body { color: var(--vscode-foreground); background: var(--vscode-sideBar-background); padding: 10px; }
     .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
-    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+    .evidenceRow { align-items: flex-start; flex-wrap: wrap; }
+    .evidenceMain { flex: 1 1 180px; min-width: 0; }
+    .evidenceActions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .evidenceMain .title, .evidenceMain .meta { overflow-wrap: anywhere; }
+    .suggestionRow { align-items: flex-start; flex-wrap: wrap; }
+    .suggestionTitle { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 14px; }
+    .toolbar button {
+      flex: 1 1 150px;
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
     button {
       color: var(--vscode-button-foreground);
       background: var(--vscode-button-background);
@@ -205,14 +217,16 @@ export class EvidenceViewProvider implements vscode.WebviewViewProvider {
         card.className = 'card';
 
         const top = document.createElement('div');
-        top.className = 'row';
+        top.className = 'row evidenceRow';
 
         const left = document.createElement('div');
+        left.className = 'evidenceMain';
         left.innerHTML = '<div class="title"></div><div class="meta"></div>';
         left.querySelector('.title').textContent = it.title || '(no title)';
         left.querySelector('.meta').textContent = (it.type || 'evidence') + ' • ' + (it.ref || '');
 
         const right = document.createElement('div');
+        right.className = 'evidenceActions';
         const editBtn = document.createElement('button');
         editBtn.className = 'secondary';
         editBtn.textContent = 'Edit why';
@@ -313,9 +327,9 @@ export class EvidenceViewProvider implements vscode.WebviewViewProvider {
         card.className = 'card';
 
         const top = document.createElement('div');
-        top.className = 'row';
+        top.className = 'row suggestionRow';
         const title = document.createElement('div');
-        title.className = 'title';
+        title.className = 'title suggestionTitle';
         title.textContent = it.title || 'Suggested raw evidence';
         top.appendChild(title);
 
